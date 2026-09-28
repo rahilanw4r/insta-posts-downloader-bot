@@ -32,9 +32,13 @@ button:disabled{opacity:.5;cursor:wait}.note{font-size:13px;color:#9da3af}.statu
 <div class="status" id="status" aria-live="polite">Ready. No Instagram password needed.</div><p class="note">Only public content you have permission to save. Instagram may throttle or block automated access; full-profile downloads are not guaranteed. Large profiles may take a while.</p></main>
 <script>
 const form=document.querySelector('#form'), input=document.querySelector('#username'), go=document.querySelector('#go'), statusBox=document.querySelector('#status');
+async function readJson(response){
+ const raw=await response.text();
+ try{return JSON.parse(raw)}catch(_){throw Error("Server returned a non-JSON response (HTTP "+response.status+"). Check that Flask is running and open the forwarded port 8080 URL, not the GitHub preview. "+raw.slice(0,180))}
+}
 form.addEventListener('submit',async e=>{e.preventDefault();go.disabled=true;statusBox.textContent='Starting…';
-try{const r=await fetch('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:input.value})});const data=await r.json();if(!r.ok)throw Error(data.error||'Could not start job');poll(data.id)}catch(err){statusBox.textContent=err.message;go.disabled=false}});
-async function poll(id){try{const r=await fetch('/api/jobs/'+id);const j=await r.json();if(!r.ok)throw Error(j.error||'Status check failed');statusBox.textContent=j.message||j.status;
+try{const r=await fetch('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:input.value})});const data=await readJson(r);if(!r.ok)throw Error(data.error||'Could not start job');poll(data.id)}catch(err){statusBox.textContent=err.message;go.disabled=false}});
+async function poll(id){try{const r=await fetch('/api/jobs/'+id);const j=await readJson(r);if(!r.ok)throw Error(j.error||'Status check failed');statusBox.textContent=j.message||j.status;
 if(j.status==='done'){statusBox.innerHTML='Archive ready. <a class="download" href="/api/jobs/'+id+'/download">Save ZIP to device</a>';go.disabled=false;return}
 if(j.status==='error'){go.disabled=false;return}setTimeout(()=>poll(id),2500)}catch(err){statusBox.textContent=err.message;go.disabled=false}}
 </script></html>"""
@@ -45,7 +49,7 @@ def home():
 
 def normalize_username(value):
     value = (value or "").strip()
-    value = re.sub(r"^https?://(www\\.)?instagram\\.com/", "", value, flags=re.I)
+    value = re.sub(r"^https?://(www\.)?instagram\.com/", "", value, flags=re.I)
     value = value.split("?")[0].strip("/")
     value = value.lstrip("@")
     if not USERNAME_RE.fullmatch(value):
